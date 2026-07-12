@@ -1,0 +1,16 @@
+# Binaries
+deploydiff
+
+# Go
+coverage.out
+*.test
+
+# macOS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
