@@ -1,40 +1,69 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
+	"fmt"
+	"io"
+	"log"
 	"os"
 
 	"github.com/spf13/cobra"
 )
 
-// rootCmd represents the base command when called without any subcommands
-var rootCmd = &cobra.Command{
-	Use:   "deploydiff",
-	Short: "Understand Kubernetes deployment changes before they happen.",
-	Long: `DeployDiff analyzes Kubernetes deployment manifests,
+// Version is set at build time for release binaries.
+var Version = "dev"
+
+type options struct {
+	configPath string
+	verbose    bool
+	output     string
+}
+
+// Execute runs the DeployDiff command-line interface.
+func Execute() {
+	if err := NewRootCmd(os.Stdout, os.Stderr).Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+// NewRootCmd creates the DeployDiff command tree. Separate output writers make
+// the CLI straightforward to embed and test.
+func NewRootCmd(out, errOut io.Writer) *cobra.Command {
+	opts := &options{}
+	logger := log.New(errOut, "deploydiff: ", 0)
+
+	rootCmd := &cobra.Command{
+		Use:   "deploydiff",
+		Short: "Understand Kubernetes deployment changes before they happen.",
+		Long: `DeployDiff analyzes Kubernetes deployment manifests,
 builds a dependency graph,
 compares deployment states,
 and explains the impact of infrastructure changes.
 
 It supports Kubernetes YAML, Helm, and Skaffold projects.`,
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
-}
-
-// Execute adds all child commands to the root command and sets flags appropriately.
-// This is called by main.main(). It only needs to happen once to the rootCmd.
-func Execute() {
-	err := rootCmd.Execute()
-	if err != nil {
-		os.Exit(1)
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			if !validOutput(opts.output) {
+				return fmt.Errorf("unsupported output format %q (supported: table, json, yaml)", opts.output)
+			}
+			if opts.verbose {
+				logger.Printf("command=%s output=%s config=%q", cmd.CommandPath(), opts.output, opts.configPath)
+			}
+			return nil
+		},
 	}
+
+	rootCmd.SetOut(out)
+	rootCmd.SetErr(errOut)
+	rootCmd.PersistentFlags().StringVar(&opts.configPath, "config", "", "Path to configuration file")
+	rootCmd.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "Enable verbose logging")
+	rootCmd.PersistentFlags().StringVarP(&opts.output, "output", "o", "table", "Output format (table,json,yaml)")
+
+	rootCmd.AddCommand(newCompareCmd(out), newVersionCmd(out))
+	return rootCmd
 }
 
-func init() {
-	rootCmd.PersistentFlags().String("config", "", "Path to configuration file")
-	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose logging")
-	rootCmd.PersistentFlags().StringP("output", "o", "table", "Output format (table,json,yaml)")
+func validOutput(format string) bool {
+	return format == "table" || format == "json" || format == "yaml"
 }
