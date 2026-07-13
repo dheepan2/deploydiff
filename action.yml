@@ -1,6 +1,9 @@
 name: DeployDiff
 description: Compare two Kubernetes manifest states and report deployment changes.
 author: Dheepan R
+branding:
+  icon: git-pull-request
+  color: blue
 
 inputs:
   before:
