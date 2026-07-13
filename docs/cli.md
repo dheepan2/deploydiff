@@ -24,16 +24,28 @@ Compare two manifest directories:
 deploydiff compare ./before ./after
 ```
 
-Git-reference comparison is planned:
+Compare the current branch with a Git reference without creating checkout
+directories yourself:
 
 ```bash
 deploydiff compare --base origin/main --head HEAD
 ```
 
+When your repository contains non-production fixture manifests, target only the
+manifest directory:
+
+```bash
+deploydiff compare --base origin/main --head HEAD --path deploy/kubernetes
+```
+
 Path-based comparison loads Kubernetes YAML from each file or directory and
 reports added, removed, and modified resources. Modified resources include
 field-level values, for example `spec.replicas: 2 → 3`. Git-reference comparison
-will be enabled once the Git manifest reader is implemented.
+uses `git archive` to materialize both revisions in temporary directories, which
+are removed automatically. It discovers Kubernetes manifests recursively and
+ignores unrelated valid YAML by default. `--path` defaults to `.`; a path that
+does not exist in one revision is treated as an empty deployment state, so
+adding or removing a manifest directory is reported correctly.
 
 Deployments, Services, Ingresses, PersistentVolumeClaims, ConfigMaps, and
 Secrets are all supported by the generic manifest comparison. Secret `data` and

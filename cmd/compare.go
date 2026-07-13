@@ -2,10 +2,15 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/dheepan2/deploydiff/internal/diff"
+	"github.com/dheepan2/deploydiff/internal/gitref"
 	"github.com/dheepan2/deploydiff/internal/manifest"
 	"github.com/dheepan2/deploydiff/internal/resource"
 	"github.com/spf13/cobra"
@@ -16,6 +21,7 @@ func newCompareCmd(out io.Writer, outputFormat func() string) *cobra.Command {
 	var base string
 	var head string
 	var discover bool
+	var manifestPath string
 
 	compareCmd := &cobra.Command{
 		Use:   "compare [before] [after]",
@@ -39,7 +45,7 @@ Provide either two manifest paths or both --base and --head Git references.`,
 		},
 		RunE: func(_ *cobra.Command, args []string) error {
 			if base != "" || head != "" {
-				return fmt.Errorf("Git reference comparison is not implemented yet; provide two manifest paths")
+				return compareGitReferences(out, outputFormat(), base, head, manifestPath)
 			}
 
 			before, err := loadState(args[0], "before", discover)
@@ -61,8 +67,60 @@ Provide either two manifest paths or both --base and --head Git references.`,
 	compareCmd.SetOut(out)
 	compareCmd.Flags().StringVar(&base, "base", "", "Base Git reference")
 	compareCmd.Flags().StringVar(&head, "head", "", "Head Git reference")
+	compareCmd.Flags().StringVar(&manifestPath, "path", ".", "Manifest path within each Git reference")
 	compareCmd.Flags().BoolVar(&discover, "discover", false, "Discover Kubernetes manifests in YAML files and ignore unrelated YAML")
 	return compareCmd
+}
+
+func compareGitReferences(out io.Writer, outputFormat, base, head, manifestPath string) error {
+	manifestPath, err := safeGitManifestPath(manifestPath)
+	if err != nil {
+		return err
+	}
+	temporaryDirectory, err := os.MkdirTemp("", "deploydiff-")
+	if err != nil {
+		return fmt.Errorf("create temporary Git comparison directory: %w", err)
+	}
+	defer os.RemoveAll(temporaryDirectory)
+
+	beforePath := filepath.Join(temporaryDirectory, "before")
+	afterPath := filepath.Join(temporaryDirectory, "after")
+	if err := gitref.Export(base, beforePath); err != nil {
+		return fmt.Errorf("materialize base Git reference: %w", err)
+	}
+	if err := gitref.Export(head, afterPath); err != nil {
+		return fmt.Errorf("materialize head Git reference: %w", err)
+	}
+
+	before, err := loadGitState(filepath.Join(beforePath, manifestPath), "base")
+	if err != nil {
+		return err
+	}
+	after, err := loadGitState(filepath.Join(afterPath, manifestPath), "head")
+	if err != nil {
+		return err
+	}
+	result, err := diff.Compare(before, after)
+	if err != nil {
+		return fmt.Errorf("compare deployment states: %w", err)
+	}
+	return renderComparison(out, outputFormat, result)
+}
+
+func safeGitManifestPath(path string) (string, error) {
+	cleanPath := filepath.Clean(path)
+	if filepath.IsAbs(cleanPath) || cleanPath == ".." || strings.HasPrefix(cleanPath, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("Git manifest path must stay within the repository: %q", path)
+	}
+	return cleanPath, nil
+}
+
+func loadGitState(path, name string) ([]resource.Resource, error) {
+	resources, err := loadState(path, name, true)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	return resources, err
 }
 
 func loadState(path, name string, discover bool) ([]resource.Resource, error) {

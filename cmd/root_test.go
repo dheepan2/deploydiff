@@ -66,7 +66,8 @@ func TestCompareRequiresOneSupportedInputForm(t *testing.T) {
 		want string
 	}{
 		{name: "missing path", args: []string{"compare", "before", "after"}, want: "load before deployment state"},
-		{name: "git references", args: []string{"compare", "--base", "origin/main", "--head", "HEAD"}, want: "Git reference comparison is not implemented yet"},
+		{name: "unknown git reference", args: []string{"compare", "--base", "deploydiff-missing-reference", "--head", "HEAD"}, want: "materialize base Git reference"},
+		{name: "Git path outside repository", args: []string{"compare", "--base", "HEAD", "--head", "HEAD", "--path", "../manifests"}, want: "Git manifest path must stay within the repository"},
 		{name: "missing head", args: []string{"compare", "--base", "origin/main"}, want: "both --base and --head are required together"},
 		{name: "no inputs", args: []string{"compare"}, want: "provide two manifest paths or both --base and --head"},
 		{name: "mixed inputs", args: []string{"compare", "before", "after", "--base", "origin/main", "--head", "HEAD"}, want: "provide two manifest paths or both --base and --head"},
