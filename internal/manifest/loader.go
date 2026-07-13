@@ -2,6 +2,7 @@
 package manifest
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -86,13 +87,18 @@ func yamlFiles(dir string) ([]string, error) {
 }
 
 func loadFile(path string, discover bool) ([]Resource, error) {
-	file, err := os.Open(path)
+	reader, closeReader, err := manifestReader(path, discover)
 	if err != nil {
-		return nil, fmt.Errorf("open manifest file %q: %w", path, err)
+		return nil, err
 	}
-	defer file.Close()
+	if closeReader != nil {
+		defer closeReader()
+	}
+	if reader == nil {
+		return nil, nil
+	}
 
-	decoder := yaml.NewDecoder(file)
+	decoder := yaml.NewDecoder(reader)
 	var resources []Resource
 	for document := 1; ; document++ {
 		var object map[string]any
@@ -119,6 +125,29 @@ func loadFile(path string, discover bool) ([]Resource, error) {
 		resources = append(resources, resource)
 	}
 	return resources, nil
+}
+
+func manifestReader(path string, discover bool) (io.Reader, func() error, error) {
+	if discover {
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return nil, nil, fmt.Errorf("read manifest file %q: %w", path, err)
+		}
+		if hasTemplateActions(contents) {
+			return nil, nil, nil
+		}
+		return bytes.NewReader(contents), nil, nil
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open manifest file %q: %w", path, err)
+	}
+	return file, file.Close, nil
+}
+
+func hasTemplateActions(contents []byte) bool {
+	return bytes.Contains(contents, []byte("{{")) && bytes.Contains(contents, []byte("}}"))
 }
 
 func looksKubernetes(object map[string]any) bool {

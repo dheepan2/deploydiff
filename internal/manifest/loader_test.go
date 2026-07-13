@@ -70,6 +70,15 @@ func TestDiscoverSkipsNonKubernetesYAMLButRejectsIncompleteManifests(t *testing.
 	dir := t.TempDir()
 	writeFixture(t, dir, "values.yaml", "image:\n  repository: example/api\n  tag: v1\n")
 	writeFixture(t, dir, "workflow.yml", "name: CI\non: push\n")
+	writeFixture(t, dir, "external-secret.yaml", `# Apply with kubectl only after rendering this Helm template.
+---
+{{- if .Capabilities.APIVersions.Has "external-secrets.io/v1/ExternalSecret" }}
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: application-secret
+{{- end }}
+`)
 	writeFixture(t, dir, "service.yaml", validManifest("Service", "api"))
 
 	resources, err := Discover(dir)
