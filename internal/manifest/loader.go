@@ -1,0 +1,140 @@
+// Package manifest loads Kubernetes resources from YAML files.
+package manifest
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	"gopkg.in/yaml.v3"
+)
+
+// Resource is a Kubernetes resource read from a manifest document.
+type Resource struct {
+	APIVersion string
+	Kind       string
+	Namespace  string
+	Name       string
+	Source     string
+	Document   int
+	Object     map[string]any
+}
+
+// Load reads Kubernetes resources from one YAML file or every YAML file in a
+// directory tree. Files are processed in lexical path order for deterministic
+// results, and multi-document YAML files are supported.
+func Load(path string) ([]Resource, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("inspect manifest path %q: %w", path, err)
+	}
+
+	if !info.IsDir() {
+		if !isYAML(path) {
+			return nil, fmt.Errorf("manifest file %q must have a .yaml or .yml extension", path)
+		}
+		return loadFile(path)
+	}
+
+	files, err := yamlFiles(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var resources []Resource
+	for _, file := range files {
+		loaded, err := loadFile(file)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, loaded...)
+	}
+	return resources, nil
+}
+
+func yamlFiles(dir string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if !entry.IsDir() && isYAML(path) {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read manifest directory %q: %w", dir, err)
+	}
+	sort.Strings(files)
+	return files, nil
+}
+
+func loadFile(path string) ([]Resource, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open manifest file %q: %w", path, err)
+	}
+	defer file.Close()
+
+	decoder := yaml.NewDecoder(file)
+	var resources []Resource
+	for document := 1; ; document++ {
+		var object map[string]any
+		err := decoder.Decode(&object)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("decode manifest %q document %d: %w", path, document, err)
+		}
+		if len(object) == 0 {
+			continue
+		}
+
+		resource, err := resourceFromObject(object)
+		if err != nil {
+			return nil, fmt.Errorf("validate manifest %q document %d: %w", path, document, err)
+		}
+		resource.Source = path
+		resource.Document = document
+		resources = append(resources, resource)
+	}
+	return resources, nil
+}
+
+func resourceFromObject(object map[string]any) (Resource, error) {
+	apiVersion, ok := object["apiVersion"].(string)
+	if !ok || apiVersion == "" {
+		return Resource{}, fmt.Errorf("missing apiVersion")
+	}
+	kind, ok := object["kind"].(string)
+	if !ok || kind == "" {
+		return Resource{}, fmt.Errorf("missing kind")
+	}
+	metadata, ok := object["metadata"].(map[string]any)
+	if !ok {
+		return Resource{}, fmt.Errorf("missing metadata")
+	}
+	name, ok := metadata["name"].(string)
+	if !ok || name == "" {
+		return Resource{}, fmt.Errorf("missing metadata.name")
+	}
+	namespace, _ := metadata["namespace"].(string)
+
+	return Resource{
+		APIVersion: apiVersion,
+		Kind:       kind,
+		Namespace:  namespace,
+		Name:       name,
+		Object:     object,
+	}, nil
+}
+
+func isYAML(path string) bool {
+	extension := strings.ToLower(filepath.Ext(path))
+	return extension == ".yaml" || extension == ".yml"
+}

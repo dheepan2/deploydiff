@@ -106,6 +106,8 @@ Compare any two deployment states.
 
 Examples:
 
+Git-reference comparison is planned:
+
 ```bash
 deploydiff compare --base origin/main --head HEAD
 ```

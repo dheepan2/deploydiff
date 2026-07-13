@@ -5,10 +5,12 @@
 - Configuration
 - Logging
 - Version
-- CI/CD
+- CI workflow (complete)
 
 ## M2
-- YAML loader
+- YAML loader (complete)
+- Resource model and parser (complete)
+- Resource comparison engine (complete)
 - Helm renderer
 - Skaffold renderer
 
