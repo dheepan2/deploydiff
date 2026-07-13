@@ -1,0 +1,27 @@
+name: DeployDiff
+description: Compare two Kubernetes manifest states and report deployment changes.
+author: Dheepan R
+
+inputs:
+  before:
+    description: Path to the base Kubernetes manifest file or directory.
+    required: true
+  after:
+    description: Path to the changed Kubernetes manifest file or directory.
+    required: true
+  output:
+    description: Report format: table, json, or yaml.
+    required: false
+    default: table
+
+outputs:
+  report:
+    description: The rendered DeployDiff comparison report.
+
+runs:
+  using: docker
+  image: Dockerfile
+  args:
+    - ${{ inputs.before }}
+    - ${{ inputs.after }}
+    - ${{ inputs.output }}

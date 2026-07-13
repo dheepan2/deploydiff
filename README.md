@@ -136,6 +136,18 @@ DeployDiff aims to detect:
 * Resource ownership
 * Rollout risks
 
+## GitHub Action
+
+DeployDiff can run in GitHub Actions to compare Kubernetes manifests from a
+pull request's base and head commits. See the [GitHub Action guide](docs/github-action.md)
+for setup and a complete workflow example.
+
+## Install
+
+Versioned GitHub Releases provide macOS and Linux archives for `amd64` and
+`arm64`. See [the release guide](docs/releasing.md) for release and install
+instructions.
+
 ---
 
 # Roadmap
