@@ -5,7 +5,7 @@
 - Configuration
 - Logging
 - Version
-- CI/CD
+- CI workflow (complete)
 
 ## M2
 - YAML loader (complete)
