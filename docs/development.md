@@ -89,3 +89,9 @@ The repository includes `.github/workflows/ci.yml`. It runs on pushes, pull
 requests, and manual dispatches, and verifies `go test ./...`, `go vet ./...`,
 the binary build, fixture comparison, and Docker action image. The workflow
 uses read-only repository permissions.
+
+## Releases
+
+Pushing a new version tag runs `.github/workflows/release.yml`, which tests the
+source and publishes macOS and Linux archives with SHA-256 checksums. See
+[releasing.md](releasing.md) for the release procedure.
