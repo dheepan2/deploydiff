@@ -8,7 +8,8 @@
 - CI/CD
 
 ## M2
-- YAML loader
+- YAML loader (complete)
+- Resource model and parser (complete)
 - Helm renderer
 - Skaffold renderer
 
