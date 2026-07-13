@@ -42,9 +42,10 @@ flag validation, verbose logging, and supported `compare` input forms.
 ./deploydiff compare --base origin/main --head HEAD
 ```
 
-`compare` currently validates these invocation forms. The manifest loader is
-available, while resource parsing and the comparison engine are the next M2
-steps.
+Path-based `compare` runs the manifest loader, resource parser, and comparison
+engine, then renders a table by default. Use `--output json` or `--output yaml`
+for machine-readable summaries. Git-reference loading is the remaining
+integration step.
 
 ## Manifest loader
 
@@ -53,6 +54,12 @@ file or directory and supports multi-document Kubernetes manifests. The
 `resource` package parses those manifests into stable Kubernetes identities and
 detects duplicate resources. Run both packages' unit tests with the standard
 test command above.
+
+## Comparison engine
+
+The internal `diff` package compares parsed deployment states and returns
+deterministically ordered added, removed, and modified resources. It is covered
+by the standard test command above.
 
 ## Format
 

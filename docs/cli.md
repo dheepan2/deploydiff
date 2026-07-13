@@ -24,14 +24,23 @@ Compare two manifest directories:
 deploydiff compare ./before ./after
 ```
 
-Or compare two Git references:
+Git-reference comparison is planned:
 
 ```bash
 deploydiff compare --base origin/main --head HEAD
 ```
 
-The command validates its input today; manifest comparison will be added with the
-manifest loader and diff engine.
+Path-based comparison loads Kubernetes YAML from each file or directory and
+reports added, removed, and modified resources. Git-reference comparison will
+be enabled once the Git manifest reader is implemented.
+
+Use the global output flag to select a report format:
+
+```bash
+deploydiff --output table compare ./before ./after
+deploydiff --output json compare ./before ./after
+deploydiff --output yaml compare ./before ./after
+```
 
 ## version
 

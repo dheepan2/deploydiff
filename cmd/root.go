@@ -60,7 +60,7 @@ It supports Kubernetes YAML, Helm, and Skaffold projects.`,
 	rootCmd.PersistentFlags().BoolVarP(&opts.verbose, "verbose", "v", false, "Enable verbose logging")
 	rootCmd.PersistentFlags().StringVarP(&opts.output, "output", "o", "table", "Output format (table,json,yaml)")
 
-	rootCmd.AddCommand(newCompareCmd(out), newVersionCmd(out))
+	rootCmd.AddCommand(newCompareCmd(out, func() string { return opts.output }), newVersionCmd(out))
 	return rootCmd
 }
 

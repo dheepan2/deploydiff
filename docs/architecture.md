@@ -38,3 +38,11 @@ identity: API group, API version, kind, namespace, and name. It also extracts
 labels and annotations, preserves source metadata and the raw object, and
 rejects duplicate identities in the same deployment state. This model is the
 input to the dependency graph and comparison engine.
+
+## Comparison engine
+
+The comparison engine accepts two parsed deployment states and deterministically
+classifies resources as added, removed, or modified. Resources are matched by
+their normalized identity; only their raw manifest object determines whether a
+matched resource changed, so moving a manifest file alone does not create a
+deployment change. Duplicate identities are rejected defensively.
