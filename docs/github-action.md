@@ -13,10 +13,11 @@ workflow log, job summary, and the `report` action output.
 | `output` | No | `table` (default), `json`, or `yaml`. |
 | `discover-manifests` | No | Discover Kubernetes manifests in arbitrary YAML paths; defaults to `true`. |
 
-## Pull request example
+## Pull request workflow (recommended)
 
-This workflow compares all Kubernetes manifests found recursively in a pull
-request's base and head commits, while ignoring unrelated YAML files:
+Call DeployDiff's reusable workflow from a workflow in the repository you want
+to protect. It checks out the pull request's base and head commits, discovers
+Kubernetes manifests recursively, and adds the report to the job summary.
 
 ```yaml
 name: DeployDiff
@@ -32,27 +33,19 @@ permissions:
 
 jobs:
   compare:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out base manifests
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.base.sha }}
-          path: before
-
-      - name: Check out pull request manifests
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          path: after
-
-      - name: Compare deployment impact
-        uses: dheepan2/deploydiff@v0.1.3
-        with:
-          before: before
-          after: after
-          output: table
+    uses: dheepan2/deploydiff/.github/workflows/compare-pr.yml@v0.1.4
+    with:
+      manifest-path: . # Or a folder such as deploy/kubernetes
+      output: table
 ```
 
-The action creates a PR check and adds the report to the job summary. Posting a
-comment directly on a pull request is intentionally not enabled by default.
+Use `manifest-path: .` when manifests may live anywhere in the repository. The
+workflow ignores valid non-Kubernetes YAML such as Helm values files, but fails
+for malformed or incomplete Kubernetes manifests.
+
+## Direct action usage
+
+If your workflow already checks out both revisions, use the Docker action
+directly with the `before` and `after` paths described above. The action creates
+a PR check and adds the report to the job summary. Posting a comment directly
+on a pull request is intentionally not enabled by default.

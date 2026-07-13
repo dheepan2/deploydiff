@@ -1,0 +1,44 @@
+name: Compare Pull Request Manifests
+
+on:
+  workflow_call:
+    inputs:
+      manifest-path:
+        description: Path within the repository to compare. Use . to discover manifests everywhere.
+        required: false
+        type: string
+        default: .
+      output:
+        description: "Report format: table, json, or yaml."
+        required: false
+        type: string
+        default: table
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: Compare Kubernetes manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out pull request base
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: before
+
+      - name: Check out pull request head
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: after
+
+      - name: Compare deployment impact
+        uses: dheepan2/deploydiff@v0.1.4
+        with:
+          before: before/${{ inputs.manifest-path }}
+          after: after/${{ inputs.manifest-path }}
+          output: ${{ inputs.output }}
+          discover-manifests: true
