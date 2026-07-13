@@ -60,10 +60,10 @@ deploydiff --output yaml compare ./before ./after
 ```
 
 Use `--discover` when the input directory includes unrelated YAML such as Helm
-values, GitHub workflow files, application configuration, or unrendered Helm
-templates. DeployDiff skips files containing Go-template actions (`{{ ... }}`)
-because they must be rendered by Helm before they are Kubernetes YAML. It then
-loads only documents with Kubernetes identity fields:
+values, `Chart.yaml`, GitHub workflow files, application configuration, or
+unrendered Helm templates. DeployDiff skips files containing Go-template actions
+(`{{ ... }}`) because they must be rendered by Helm before they are Kubernetes
+YAML. It then loads only documents with Kubernetes identity fields:
 
 ```bash
 deploydiff compare --discover ./before-repository ./after-repository

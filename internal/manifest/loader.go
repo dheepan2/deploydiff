@@ -33,8 +33,9 @@ func Load(path string) ([]Resource, error) {
 
 // Discover reads Kubernetes resources from a YAML file or directory tree while
 // ignoring valid YAML documents that are not Kubernetes manifests. A document
-// is considered Kubernetes-looking when it has apiVersion, kind, or metadata;
-// incomplete Kubernetes-looking documents still return a validation error.
+// is considered Kubernetes-looking when it has kind or metadata; incomplete
+// Kubernetes-looking documents still return a validation error. apiVersion
+// alone is not enough because Helm Chart.yaml files use that field too.
 func Discover(path string) ([]Resource, error) {
 	return load(path, true)
 }
@@ -151,10 +152,9 @@ func hasTemplateActions(contents []byte) bool {
 }
 
 func looksKubernetes(object map[string]any) bool {
-	_, hasAPIVersion := object["apiVersion"]
 	_, hasKind := object["kind"]
 	_, hasMetadata := object["metadata"]
-	return hasAPIVersion || hasKind || hasMetadata
+	return hasKind || hasMetadata
 }
 
 func resourceFromObject(object map[string]any) (Resource, error) {

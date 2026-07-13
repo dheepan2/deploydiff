@@ -33,16 +33,16 @@ permissions:
 
 jobs:
   compare:
-    uses: dheepan2/deploydiff/.github/workflows/compare-pr.yml@v0.1.6
+    uses: dheepan2/deploydiff/.github/workflows/compare-pr.yml@v0.1.7
     with:
       manifest-path: . # Or a folder such as deploy/kubernetes
       output: table
 ```
 
 Use `manifest-path: .` when manifests may live anywhere in the repository. The
-workflow ignores valid non-Kubernetes YAML such as Helm values files and
-unrendered Helm templates. It still fails for malformed or incomplete plain
-Kubernetes manifests.
+workflow ignores valid non-Kubernetes YAML such as Helm values files,
+`Chart.yaml`, and unrendered Helm templates. It still fails for malformed or
+incomplete plain Kubernetes manifests.
 
 ## Direct action usage
 

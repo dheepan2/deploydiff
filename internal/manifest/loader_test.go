@@ -69,6 +69,7 @@ func TestLoadDirectoryReadsYAMLFilesInPathOrder(t *testing.T) {
 func TestDiscoverSkipsNonKubernetesYAMLButRejectsIncompleteManifests(t *testing.T) {
 	dir := t.TempDir()
 	writeFixture(t, dir, "values.yaml", "image:\n  repository: example/api\n  tag: v1\n")
+	writeFixture(t, dir, "Chart.yaml", "apiVersion: v2\nname: application\nversion: 1.2.3\n")
 	writeFixture(t, dir, "workflow.yml", "name: CI\non: push\n")
 	writeFixture(t, dir, "external-secret.yaml", `# Apply with kubectl only after rendering this Helm template.
 ---
