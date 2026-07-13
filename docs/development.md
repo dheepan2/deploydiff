@@ -87,5 +87,5 @@ the binary produced by `go build`; CI/CD and release artifacts remain M1 work.
 
 The repository includes `.github/workflows/ci.yml`. It runs on pushes, pull
 requests, and manual dispatches, and verifies `go test ./...`, `go vet ./...`,
-the binary build, and the fixture comparison. The workflow uses read-only
-repository permissions.
+the binary build, fixture comparison, and Docker action image. The workflow
+uses read-only repository permissions.

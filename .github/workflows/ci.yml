@@ -38,3 +38,16 @@ jobs:
 
       - name: Verify fixture comparison
         run: ./deploydiff compare ./testdata/compare/before ./testdata/compare/after
+
+      - name: Build Docker action image
+        run: docker build --tag deploydiff-action .
+
+      - name: Verify Docker action image
+        run: >-
+          docker run --rm
+          --volume "$PWD:/github/workspace"
+          --env GITHUB_WORKSPACE=/github/workspace
+          deploydiff-action
+          ./testdata/compare/before
+          ./testdata/compare/after
+          table
