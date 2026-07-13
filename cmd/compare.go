@@ -15,6 +15,7 @@ import (
 func newCompareCmd(out io.Writer, outputFormat func() string) *cobra.Command {
 	var base string
 	var head string
+	var discover bool
 
 	compareCmd := &cobra.Command{
 		Use:   "compare [before] [after]",
@@ -41,11 +42,11 @@ Provide either two manifest paths or both --base and --head Git references.`,
 				return fmt.Errorf("Git reference comparison is not implemented yet; provide two manifest paths")
 			}
 
-			before, err := loadState(args[0], "before")
+			before, err := loadState(args[0], "before", discover)
 			if err != nil {
 				return err
 			}
-			after, err := loadState(args[1], "after")
+			after, err := loadState(args[1], "after", discover)
 			if err != nil {
 				return err
 			}
@@ -60,11 +61,18 @@ Provide either two manifest paths or both --base and --head Git references.`,
 	compareCmd.SetOut(out)
 	compareCmd.Flags().StringVar(&base, "base", "", "Base Git reference")
 	compareCmd.Flags().StringVar(&head, "head", "", "Head Git reference")
+	compareCmd.Flags().BoolVar(&discover, "discover", false, "Discover Kubernetes manifests in YAML files and ignore unrelated YAML")
 	return compareCmd
 }
 
-func loadState(path, name string) ([]resource.Resource, error) {
-	manifests, err := manifest.Load(path)
+func loadState(path, name string, discover bool) ([]resource.Resource, error) {
+	var manifests []manifest.Resource
+	var err error
+	if discover {
+		manifests, err = manifest.Discover(path)
+	} else {
+		manifests, err = manifest.Load(path)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("load %s deployment state: %w", name, err)
 	}

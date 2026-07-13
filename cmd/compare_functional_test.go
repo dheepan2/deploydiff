@@ -16,7 +16,7 @@ func TestCompareFixtureDirectories(t *testing.T) {
 	after := compareFixturePath(t, "after")
 
 	t.Run("table output", func(t *testing.T) {
-		out, err := runCompare(before, after)
+		out, err := runCompare("--discover", before, after)
 		if err != nil {
 			t.Fatalf("compare returned an error: %v", err)
 		}
@@ -40,7 +40,7 @@ func TestCompareFixtureDirectories(t *testing.T) {
 	})
 
 	t.Run("JSON output", func(t *testing.T) {
-		out, err := runCompare("--output", "json", before, after)
+		out, err := runCompare("--output", "json", "--discover", before, after)
 		if err != nil {
 			t.Fatalf("JSON compare returned an error: %v", err)
 		}
@@ -69,7 +69,7 @@ func TestCompareFixtureDirectories(t *testing.T) {
 	})
 
 	t.Run("no changes", func(t *testing.T) {
-		out, err := runCompare(before, before)
+		out, err := runCompare("--discover", before, before)
 		if err != nil {
 			t.Fatalf("compare returned an error: %v", err)
 		}

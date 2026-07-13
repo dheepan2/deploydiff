@@ -13,6 +13,10 @@ inputs:
     description: "Report format: table, json, or yaml."
     required: false
     default: table
+  discover-manifests:
+    description: Discover Kubernetes manifests recursively and ignore unrelated YAML.
+    required: false
+    default: "true"
 
 outputs:
   report:
@@ -25,3 +29,4 @@ runs:
     - ${{ inputs.before }}
     - ${{ inputs.after }}
     - ${{ inputs.output }}
+    - ${{ inputs.discover-manifests }}

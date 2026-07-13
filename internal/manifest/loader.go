@@ -27,6 +27,18 @@ type Resource struct {
 // directory tree. Files are processed in lexical path order for deterministic
 // results, and multi-document YAML files are supported.
 func Load(path string) ([]Resource, error) {
+	return load(path, false)
+}
+
+// Discover reads Kubernetes resources from a YAML file or directory tree while
+// ignoring valid YAML documents that are not Kubernetes manifests. A document
+// is considered Kubernetes-looking when it has apiVersion, kind, or metadata;
+// incomplete Kubernetes-looking documents still return a validation error.
+func Discover(path string) ([]Resource, error) {
+	return load(path, true)
+}
+
+func load(path string, discover bool) ([]Resource, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, fmt.Errorf("inspect manifest path %q: %w", path, err)
@@ -36,7 +48,7 @@ func Load(path string) ([]Resource, error) {
 		if !isYAML(path) {
 			return nil, fmt.Errorf("manifest file %q must have a .yaml or .yml extension", path)
 		}
-		return loadFile(path)
+		return loadFile(path, discover)
 	}
 
 	files, err := yamlFiles(path)
@@ -46,7 +58,7 @@ func Load(path string) ([]Resource, error) {
 
 	var resources []Resource
 	for _, file := range files {
-		loaded, err := loadFile(file)
+		loaded, err := loadFile(file, discover)
 		if err != nil {
 			return nil, err
 		}
@@ -73,7 +85,7 @@ func yamlFiles(dir string) ([]string, error) {
 	return files, nil
 }
 
-func loadFile(path string) ([]Resource, error) {
+func loadFile(path string, discover bool) ([]Resource, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("open manifest file %q: %w", path, err)
@@ -97,6 +109,9 @@ func loadFile(path string) ([]Resource, error) {
 
 		resource, err := resourceFromObject(object)
 		if err != nil {
+			if discover && !looksKubernetes(object) {
+				continue
+			}
 			return nil, fmt.Errorf("validate manifest %q document %d: %w", path, document, err)
 		}
 		resource.Source = path
@@ -104,6 +119,13 @@ func loadFile(path string) ([]Resource, error) {
 		resources = append(resources, resource)
 	}
 	return resources, nil
+}
+
+func looksKubernetes(object map[string]any) bool {
+	_, hasAPIVersion := object["apiVersion"]
+	_, hasKind := object["kind"]
+	_, hasMetadata := object["metadata"]
+	return hasAPIVersion || hasKind || hasMetadata
 }
 
 func resourceFromObject(object map[string]any) (Resource, error) {

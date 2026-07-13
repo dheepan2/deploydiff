@@ -66,6 +66,27 @@ func TestLoadDirectoryReadsYAMLFilesInPathOrder(t *testing.T) {
 	}
 }
 
+func TestDiscoverSkipsNonKubernetesYAMLButRejectsIncompleteManifests(t *testing.T) {
+	dir := t.TempDir()
+	writeFixture(t, dir, "values.yaml", "image:\n  repository: example/api\n  tag: v1\n")
+	writeFixture(t, dir, "workflow.yml", "name: CI\non: push\n")
+	writeFixture(t, dir, "service.yaml", validManifest("Service", "api"))
+
+	resources, err := Discover(dir)
+	if err != nil {
+		t.Fatalf("Discover returned an error: %v", err)
+	}
+	if len(resources) != 1 || resources[0].Kind != "Service" {
+		t.Errorf("discovered resources = %#v", resources)
+	}
+
+	writeFixture(t, dir, "incomplete.yaml", "apiVersion: v1\nkind: ConfigMap\n")
+	_, err = Discover(dir)
+	if err == nil || !strings.Contains(err.Error(), "missing metadata") {
+		t.Errorf("incomplete Kubernetes manifest error = %v", err)
+	}
+}
+
 func TestLoadRejectsInvalidAndIncompleteDocuments(t *testing.T) {
 	dir := t.TempDir()
 

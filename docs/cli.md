@@ -47,6 +47,14 @@ deploydiff --output json compare ./before ./after
 deploydiff --output yaml compare ./before ./after
 ```
 
+Use `--discover` when the input directory includes unrelated YAML such as Helm
+values, GitHub workflow files, or application configuration. DeployDiff then
+loads only documents with Kubernetes identity fields:
+
+```bash
+deploydiff compare --discover ./before-repository ./after-repository
+```
+
 ## version
 
 Print the version embedded in the binary at build time.

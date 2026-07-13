@@ -4,12 +4,24 @@ set -eu
 before=$1
 after=$2
 output=$3
+discover=${4:-true}
 
 if [ -n "${GITHUB_WORKSPACE:-}" ]; then
   cd "$GITHUB_WORKSPACE"
 fi
 
-report=$(deploydiff --output "$output" compare "$before" "$after")
+case "$discover" in
+  true)
+    report=$(deploydiff --output "$output" compare --discover "$before" "$after")
+    ;;
+  false)
+    report=$(deploydiff --output "$output" compare "$before" "$after")
+    ;;
+  *)
+    echo "discover-manifests must be true or false" >&2
+    exit 2
+    ;;
+esac
 printf '%s\n' "$report"
 
 if [ -n "${GITHUB_OUTPUT:-}" ]; then

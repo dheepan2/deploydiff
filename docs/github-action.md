@@ -11,11 +11,12 @@ workflow log, job summary, and the `report` action output.
 | `before` | Yes | Path to the base manifest file or directory. |
 | `after` | Yes | Path to the changed manifest file or directory. |
 | `output` | No | `table` (default), `json`, or `yaml`. |
+| `discover-manifests` | No | Discover Kubernetes manifests in arbitrary YAML paths; defaults to `true`. |
 
 ## Pull request example
 
-This workflow compares the `k8s` directory from a pull request's base commit
-with its head commit:
+This workflow compares all Kubernetes manifests found recursively in a pull
+request's base and head commits, while ignoring unrelated YAML files:
 
 ```yaml
 name: DeployDiff
@@ -23,7 +24,8 @@ name: DeployDiff
 on:
   pull_request:
     paths:
-      - "k8s/**"
+      - "**/*.yaml"
+      - "**/*.yml"
 
 permissions:
   contents: read
@@ -45,10 +47,10 @@ jobs:
           path: after
 
       - name: Compare deployment impact
-        uses: dheepan2/deploydiff@v0.1.2
+        uses: dheepan2/deploydiff@v0.1.3
         with:
-          before: before/k8s
-          after: after/k8s
+          before: before
+          after: after
           output: table
 ```
 

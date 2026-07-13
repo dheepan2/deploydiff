@@ -61,6 +61,9 @@ The internal `diff` package compares parsed deployment states and returns
 deterministically ordered added, removed, and modified resources. It is covered
 by the standard test command above.
 
+Use `deploydiff compare --discover` to recursively find Kubernetes manifests
+inside a repository while skipping valid, unrelated YAML files.
+
 ## Functional test fixtures
 
 Reusable end-to-end manifests live in `testdata/compare/before` and
