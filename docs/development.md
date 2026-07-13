@@ -61,6 +61,17 @@ The internal `diff` package compares parsed deployment states and returns
 deterministically ordered added, removed, and modified resources. It is covered
 by the standard test command above.
 
+## Functional test fixtures
+
+Reusable end-to-end manifests live in `testdata/compare/before` and
+`testdata/compare/after`. The functional command test runs those directories
+through the public CLI and verifies table, JSON, and no-change output. You can
+also inspect them manually:
+
+```bash
+go run . compare ./testdata/compare/before ./testdata/compare/after
+```
+
 ## Format
 
 ```bash

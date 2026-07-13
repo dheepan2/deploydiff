@@ -76,16 +76,21 @@ func loadState(path, name string) ([]resource.Resource, error) {
 }
 
 type comparisonReport struct {
-	Added    []string `json:"added" yaml:"added"`
-	Removed  []string `json:"removed" yaml:"removed"`
-	Modified []string `json:"modified" yaml:"modified"`
+	Added    []string         `json:"added" yaml:"added"`
+	Removed  []string         `json:"removed" yaml:"removed"`
+	Modified []modifiedReport `json:"modified" yaml:"modified"`
+}
+
+type modifiedReport struct {
+	Resource string             `json:"resource" yaml:"resource"`
+	Changes  []diff.FieldChange `json:"changes" yaml:"changes"`
 }
 
 func renderComparison(out io.Writer, format string, result diff.Result) error {
 	report := comparisonReport{
 		Added:    resourceIDs(result.Added),
 		Removed:  resourceIDs(result.Removed),
-		Modified: modifiedIDs(result.Modified),
+		Modified: modifiedReports(result.Modified),
 	}
 
 	switch format {
@@ -120,7 +125,7 @@ func renderTable(out io.Writer, report comparisonReport) {
 	fmt.Fprintln(out, "Deployment Comparison")
 	renderTableSection(out, "Added", "+", report.Added)
 	renderTableSection(out, "Removed", "-", report.Removed)
-	renderTableSection(out, "Modified", "~", report.Modified)
+	renderModifiedTableSection(out, report.Modified)
 }
 
 func renderTableSection(out io.Writer, title, marker string, resources []string) {
@@ -133,6 +138,30 @@ func renderTableSection(out io.Writer, title, marker string, resources []string)
 	}
 }
 
+func renderModifiedTableSection(out io.Writer, modifications []modifiedReport) {
+	if len(modifications) == 0 {
+		return
+	}
+	fmt.Fprintf(out, "\nModified (%d)\n", len(modifications))
+	for _, modification := range modifications {
+		fmt.Fprintf(out, "~ %s\n", modification.Resource)
+		for _, change := range modification.Changes {
+			fmt.Fprintf(out, "  %s: %s → %s\n", change.Path, formatFieldValue(change.Before, change.BeforePresent), formatFieldValue(change.After, change.AfterPresent))
+		}
+	}
+}
+
+func formatFieldValue(value any, present bool) string {
+	if !present {
+		return "<absent>"
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Sprint(value)
+	}
+	return string(encoded)
+}
+
 func resourceIDs(resources []resource.Resource) []string {
 	ids := make([]string, len(resources))
 	for i, resource := range resources {
@@ -141,10 +170,10 @@ func resourceIDs(resources []resource.Resource) []string {
 	return ids
 }
 
-func modifiedIDs(modifications []diff.Modification) []string {
-	ids := make([]string, len(modifications))
+func modifiedReports(modifications []diff.Modification) []modifiedReport {
+	reports := make([]modifiedReport, len(modifications))
 	for i, modification := range modifications {
-		ids[i] = modification.After.ID.String()
+		reports[i] = modifiedReport{Resource: modification.After.ID.String(), Changes: modification.Changes}
 	}
-	return ids
+	return reports
 }

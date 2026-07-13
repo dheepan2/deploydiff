@@ -42,7 +42,14 @@ input to the dependency graph and comparison engine.
 ## Comparison engine
 
 The comparison engine accepts two parsed deployment states and deterministically
-classifies resources as added, removed, or modified. Resources are matched by
-their normalized identity; only their raw manifest object determines whether a
-matched resource changed, so moving a manifest file alone does not create a
-deployment change. Duplicate identities are rejected defensively.
+classifies resources as added, removed, or modified. Modified resources include
+deterministically ordered field-level changes, including nested map and list
+values. Resources are matched by their normalized identity; only their raw
+manifest object determines whether a matched resource changed, so moving a
+manifest file alone does not create a deployment change. Duplicate identities
+are rejected defensively.
+
+The generic comparison model supports Kubernetes resource kinds without a
+kind-specific parser. It is explicitly covered for Deployments, Services,
+Ingresses, PersistentVolumeClaims, ConfigMaps, and Secrets. Secret `data` and
+`stringData` field values are redacted in comparison results.

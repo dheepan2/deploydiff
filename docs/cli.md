@@ -31,8 +31,13 @@ deploydiff compare --base origin/main --head HEAD
 ```
 
 Path-based comparison loads Kubernetes YAML from each file or directory and
-reports added, removed, and modified resources. Git-reference comparison will
-be enabled once the Git manifest reader is implemented.
+reports added, removed, and modified resources. Modified resources include
+field-level values, for example `spec.replicas: 2 → 3`. Git-reference comparison
+will be enabled once the Git manifest reader is implemented.
+
+Deployments, Services, Ingresses, PersistentVolumeClaims, ConfigMaps, and
+Secrets are all supported by the generic manifest comparison. Secret `data` and
+`stringData` values are always rendered as `<redacted>`.
 
 Use the global output flag to select a report format:
 
