@@ -10,7 +10,7 @@ inputs:
     description: Path to the changed Kubernetes manifest file or directory.
     required: true
   output:
-    description: Report format: table, json, or yaml.
+    description: "Report format: table, json, or yaml."
     required: false
     default: table
 

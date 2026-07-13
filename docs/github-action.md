@@ -45,7 +45,7 @@ jobs:
           path: after
 
       - name: Compare deployment impact
-        uses: dheepan2/deploydiff@v0.1.0
+        uses: dheepan2/deploydiff@v0.1.2
         with:
           before: before/k8s
           after: after/k8s
