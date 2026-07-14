@@ -138,8 +138,8 @@ DeployDiff aims to detect:
 
 ## GitHub Action
 
-DeployDiff can run in GitHub Actions to compare Kubernetes manifests from a
-pull request's base and head commits. See the [GitHub Action guide](docs/github-action.md)
+DeployDiff can run in GitHub Actions to compare changed Kubernetes manifests
+from a pull request's base and head commits. See the [GitHub Action guide](docs/github-action.md)
 for setup and a complete workflow example.
 
 ## Install

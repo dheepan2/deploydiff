@@ -53,3 +53,16 @@ The generic comparison model supports Kubernetes resource kinds without a
 kind-specific parser. It is explicitly covered for Deployments, Services,
 Ingresses, PersistentVolumeClaims, ConfigMaps, and Secrets. Secret `data` and
 `stringData` field values are redacted in comparison results.
+
+## Phase 1 pull request scope
+
+The reusable GitHub workflow is the Phase 1 product boundary. It obtains the
+changed paths between the pull request base and head revisions and selects
+`.yaml` and `.yml` files containing a top-level `kind:` in either revision.
+Both versions of each candidate are compared, so additions, deletions, renames,
+and resource-kind changes are represented correctly.
+
+Phase 1 does not infer deployment impact from properties, Helm values,
+`Chart.yaml`, Skaffold configuration, or unrendered templates. Those inputs need
+an explicit render stage before the direct action. Native render orchestration
+and a stable end-user CLI contract remain future design work.

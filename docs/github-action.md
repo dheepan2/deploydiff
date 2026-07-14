@@ -16,8 +16,9 @@ workflow log, job summary, and the `report` action output.
 ## Pull request workflow (recommended)
 
 Call DeployDiff's reusable workflow from a workflow in the repository you want
-to protect. It checks out the pull request's base and head commits, discovers
-Kubernetes manifests recursively, and adds the report to the job summary.
+to protect. It checks out the pull request's base and head commits, selects
+changed YAML files with a top-level `kind:` in either revision, and adds the
+comparison report to the job summary.
 
 ```yaml
 name: DeployDiff
@@ -33,16 +34,21 @@ permissions:
 
 jobs:
   compare:
-    uses: dheepan2/deploydiff/.github/workflows/compare-pr.yml@v0.1.7
+    uses: dheepan2/deploydiff/.github/workflows/compare-pr.yml@v0.1.10
     with:
       manifest-path: . # Or a folder such as deploy/kubernetes
       output: table
 ```
 
-Use `manifest-path: .` when manifests may live anywhere in the repository. The
-workflow ignores valid non-Kubernetes YAML such as Helm values files,
-`Chart.yaml`, and unrendered Helm templates. It still fails for malformed or
-incomplete plain Kubernetes manifests.
+Use `manifest-path: .` when manifests may live anywhere in the repository. A
+more specific path reduces the changed-file scan. Added, deleted, renamed, and
+kind-changed manifests are supported because candidates are selected from both
+the base and head revisions.
+
+Phase 1 compares changed, plain Kubernetes YAML only. Changes to properties,
+Helm values, `Chart.yaml`, Skaffold configuration, and unrendered templates are
+not interpreted as deployment changes. Render those inputs before using the
+direct action when their deployment impact must be compared.
 
 ## Direct action usage
 

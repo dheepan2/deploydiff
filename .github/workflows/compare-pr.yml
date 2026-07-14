@@ -35,10 +35,67 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           path: after
 
+      - name: Collect changed Kubernetes manifest candidates
+        id: scope
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MANIFEST_PATH: ${{ inputs.manifest-path }}
+        run: |
+          set -euo pipefail
+
+          case "$MANIFEST_PATH" in
+            ""|/*|..|../*|*/../*|*/..)
+              echo "manifest-path must stay within the repository" >&2
+              exit 2
+              ;;
+          esac
+
+          before_scope="$GITHUB_WORKSPACE/.deploydiff/before"
+          after_scope="$GITHUB_WORKSPACE/.deploydiff/after"
+          mkdir -p "$before_scope" "$after_scope"
+
+          git -C after fetch --no-tags --depth=1 origin "$BASE_SHA"
+
+          candidates=0
+          while IFS= read -r -d '' file; do
+            lowercase=${file,,}
+            case "$lowercase" in
+              *.yaml|*.yml) ;;
+              *) continue ;;
+            esac
+
+            has_kind=false
+            for state in before after; do
+              source="$GITHUB_WORKSPACE/$state/$file"
+              if [[ -f "$source" && ! -L "$source" ]] && grep -Eq '^kind:[[:space:]]*[^[:space:]#]+' "$source"; then
+                has_kind=true
+              fi
+            done
+            if [[ "$has_kind" != true ]]; then
+              continue
+            fi
+
+            for state in before after; do
+              source="$GITHUB_WORKSPACE/$state/$file"
+              if [[ -f "$source" && ! -L "$source" ]]; then
+                target="$GITHUB_WORKSPACE/.deploydiff/$state/$file"
+                mkdir -p "$(dirname "$target")"
+                cp "$source" "$target"
+              fi
+            done
+            candidates=$((candidates + 1))
+          done < <(git -C after diff --no-renames --name-only -z "$BASE_SHA" "$HEAD_SHA" -- "$MANIFEST_PATH")
+
+          echo "Selected $candidates changed Kubernetes manifest candidate(s)."
+          echo "before=.deploydiff/before" >> "$GITHUB_OUTPUT"
+          echo "after=.deploydiff/after" >> "$GITHUB_OUTPUT"
+
       - name: Compare deployment impact
-        uses: dheepan2/deploydiff@v0.1.7
+        uses: dheepan2/deploydiff@v0.1.10
         with:
-          before: before/${{ inputs.manifest-path }}
-          after: after/${{ inputs.manifest-path }}
+          before: ${{ steps.scope.outputs.before }}
+          after: ${{ steps.scope.outputs.after }}
           output: ${{ inputs.output }}
           discover-manifests: true
