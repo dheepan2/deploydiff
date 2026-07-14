@@ -141,6 +141,51 @@ spec:
 	}
 }
 
+func TestCompareDiscoversStaticIdentityChangeInHelmTemplate(t *testing.T) {
+	dir := t.TempDir()
+	before := filepath.Join(dir, "before")
+	after := filepath.Join(dir, "after")
+	if err := os.MkdirAll(before, 0o755); err != nil {
+		t.Fatalf("create before directory: %v", err)
+	}
+	if err := os.MkdirAll(after, 0o755); err != nil {
+		t.Fatalf("create after directory: %v", err)
+	}
+
+	template := func(kind string) string {
+		return `{{- if .Values.enabled }}
+apiVersion: apps/v1
+kind: ` + kind + `
+metadata:
+  name: acp
+  namespace: production
+spec:
+  replicas: {{ .Values.replicas | default 1 }}
+{{- end }}
+`
+	}
+	writeManifest(t, before, "acp.yaml", template("Deployment"))
+	writeManifest(t, after, "acp.yaml", template("StatefulSet"))
+
+	out, _, err := runCommand(t, "compare", "--discover", before, after)
+	if err != nil {
+		t.Fatalf("compare Helm identity change returned an error: %v", err)
+	}
+	for _, expected := range []string{
+		"Added (1)",
+		"+ apps/v1 StatefulSet production/acp",
+		"Removed (1)",
+		"- apps/v1 Deployment production/acp",
+	} {
+		if !strings.Contains(out, expected) {
+			t.Errorf("template identity comparison does not contain %q:\n%s", expected, out)
+		}
+	}
+	if strings.Contains(out, "Modified") {
+		t.Errorf("kind change should not be rendered as modified:\n%s", out)
+	}
+}
+
 func writeManifest(t *testing.T, directory, name, contents string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(directory, name), []byte(contents), 0o600); err != nil {

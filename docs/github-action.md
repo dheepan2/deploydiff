@@ -43,7 +43,7 @@ permissions:
 
 jobs:
   compare:
-    uses: dheepan2/deploydiff/.github/workflows/compare-pr.yml@v0.1.11
+    uses: dheepan2/deploydiff/.github/workflows/compare-pr.yml@v0.1.12
     with:
       manifest-path: . # Or a folder such as deploy/kubernetes
       output: table
@@ -55,10 +55,13 @@ more specific path reduces the changed-file scan. Added, deleted, renamed, and
 kind-changed manifests are supported because candidates are selected from both
 the base and head revisions.
 
-Phase 1 compares changed, plain Kubernetes YAML only. Changes to properties,
-Helm values, `Chart.yaml`, Skaffold configuration, and unrendered templates are
+Phase 1 fully compares changed, plain Kubernetes YAML. For unrendered Helm
+templates, it compares only static `apiVersion`, `kind`, `metadata.name`, and
+optional namespace fields. This detects identity changes such as Deployment to
+StatefulSet, but not changes to templated replicas, images, or dependencies.
+Changes to properties, Helm values, `Chart.yaml`, and Skaffold configuration are
 not interpreted as deployment changes. Render those inputs before using the
-direct action when their deployment impact must be compared.
+direct action when their full deployment impact must be compared.
 
 When `comment` is enabled, the workflow creates one DeployDiff pull request
 comment only when deployment changes exist. Later pushes update that comment;

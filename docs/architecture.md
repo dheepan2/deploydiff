@@ -62,10 +62,16 @@ changed paths between the pull request base and head revisions and selects
 Both versions of each candidate are compared, so additions, deletions, renames,
 and resource-kind changes are represented correctly.
 
+For unrendered Helm templates, Phase 1 extracts only static `apiVersion`, `kind`,
+`metadata.name`, and optional namespace values. Dynamic or ambiguous identity
+fields cause that template document to be skipped. The resulting minimal object
+detects additions, removals, and identity changes, but intentionally cannot
+claim that templated workload fields changed.
+
 Phase 1 does not infer deployment impact from properties, Helm values,
-`Chart.yaml`, Skaffold configuration, or unrendered templates. Those inputs need
-an explicit render stage before the direct action. Native render orchestration
-and a stable end-user CLI contract remain future design work.
+`Chart.yaml`, or Skaffold configuration. Those inputs need an explicit render
+stage before the direct action. Native render orchestration and a stable
+end-user CLI contract remain future design work.
 
 The reusable workflow owns PR-comment delivery. It upserts a single comment
 identified by a hidden marker when a deployment diff exists and removes stale

@@ -86,8 +86,27 @@ metadata:
 	if err != nil {
 		t.Fatalf("Discover returned an error: %v", err)
 	}
-	if len(resources) != 1 || resources[0].Kind != "Service" {
+	if len(resources) != 2 || resources[0].Kind != "ExternalSecret" || resources[0].Name != "application-secret" || resources[0].Document != 2 || resources[1].Kind != "Service" {
 		t.Errorf("discovered resources = %#v", resources)
+	}
+	if len(resources[0].Object) != 3 {
+		t.Errorf("template identity object = %#v, want identity fields only", resources[0].Object)
+	}
+
+	writeFixture(t, dir, "dynamic-name.yaml", `
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.name }}
+spec:
+  replicas: 1
+`)
+	resources, err = Discover(dir)
+	if err != nil {
+		t.Fatalf("Discover with dynamic identity returned an error: %v", err)
+	}
+	if len(resources) != 2 {
+		t.Errorf("dynamic template identity should be skipped; resources = %#v", resources)
 	}
 
 	writeFixture(t, dir, "incomplete.yaml", "apiVersion: v1\nkind: ConfigMap\n")

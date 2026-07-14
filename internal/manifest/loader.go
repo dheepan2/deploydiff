@@ -35,7 +35,8 @@ func Load(path string) ([]Resource, error) {
 // ignoring valid YAML documents that are not Kubernetes manifests. A document
 // is considered Kubernetes-looking when it has kind or metadata; incomplete
 // Kubernetes-looking documents still return a validation error. apiVersion
-// alone is not enough because Helm Chart.yaml files use that field too.
+// alone is not enough because Helm Chart.yaml files use that field too. For
+// unrendered templates, only static Kubernetes identity fields are discovered.
 func Discover(path string) ([]Resource, error) {
 	return load(path, true)
 }
@@ -88,15 +89,23 @@ func yamlFiles(dir string) ([]string, error) {
 }
 
 func loadFile(path string, discover bool) ([]Resource, error) {
-	reader, closeReader, err := manifestReader(path, discover)
-	if err != nil {
-		return nil, err
-	}
-	if closeReader != nil {
-		defer closeReader()
-	}
-	if reader == nil {
-		return nil, nil
+	var reader io.Reader
+	if discover {
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read manifest file %q: %w", path, err)
+		}
+		if hasTemplateActions(contents) {
+			return discoverTemplateIdentities(path, contents), nil
+		}
+		reader = bytes.NewReader(contents)
+	} else {
+		file, err := os.Open(path)
+		if err != nil {
+			return nil, fmt.Errorf("open manifest file %q: %w", path, err)
+		}
+		defer file.Close()
+		reader = file
 	}
 
 	decoder := yaml.NewDecoder(reader)
@@ -128,27 +137,143 @@ func loadFile(path string, discover bool) ([]Resource, error) {
 	return resources, nil
 }
 
-func manifestReader(path string, discover bool) (io.Reader, func() error, error) {
-	if discover {
-		contents, err := os.ReadFile(path)
-		if err != nil {
-			return nil, nil, fmt.Errorf("read manifest file %q: %w", path, err)
-		}
-		if hasTemplateActions(contents) {
-			return nil, nil, nil
-		}
-		return bytes.NewReader(contents), nil, nil
-	}
-
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, nil, fmt.Errorf("open manifest file %q: %w", path, err)
-	}
-	return file, file.Close, nil
-}
-
 func hasTemplateActions(contents []byte) bool {
 	return bytes.Contains(contents, []byte("{{")) && bytes.Contains(contents, []byte("}}"))
+}
+
+type templateIdentity struct {
+	apiVersion     string
+	kind           string
+	name           string
+	namespace      string
+	apiVersionSeen bool
+	kindSeen       bool
+	nameSeen       bool
+	namespaceSeen  bool
+	metadata       bool
+	metadataIndent int
+	metadataChild  int
+	valid          bool
+}
+
+func discoverTemplateIdentities(path string, contents []byte) []Resource {
+	document := 1
+	identity := newTemplateIdentity()
+	var resources []Resource
+
+	flush := func() {
+		if resource, ok := identity.resource(path, document); ok {
+			resources = append(resources, resource)
+		}
+		identity = newTemplateIdentity()
+	}
+
+	for _, line := range strings.Split(string(contents), "\n") {
+		trimmed := strings.TrimSpace(line)
+		indent := len(line) - len(strings.TrimLeft(line, " \t"))
+		if indent == 0 && isDocumentBoundary(trimmed) {
+			flush()
+			document++
+			continue
+		}
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") || isTemplateDirective(trimmed) {
+			continue
+		}
+
+		if indent == 0 {
+			identity.metadata = false
+			identity.metadataChild = -1
+			switch {
+			case strings.HasPrefix(trimmed, "apiVersion:"):
+				identity.capture(trimmed, "apiVersion", &identity.apiVersion, &identity.apiVersionSeen)
+			case strings.HasPrefix(trimmed, "kind:"):
+				identity.capture(trimmed, "kind", &identity.kind, &identity.kindSeen)
+			case trimmed == "metadata:" || strings.HasPrefix(trimmed, "metadata: #"):
+				identity.metadata = true
+				identity.metadataIndent = indent
+			}
+			continue
+		}
+
+		if !identity.metadata || indent <= identity.metadataIndent {
+			continue
+		}
+		if identity.metadataChild == -1 {
+			identity.metadataChild = indent
+		}
+		if indent != identity.metadataChild {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(trimmed, "name:"):
+			identity.capture(trimmed, "name", &identity.name, &identity.nameSeen)
+		case strings.HasPrefix(trimmed, "namespace:"):
+			identity.capture(trimmed, "namespace", &identity.namespace, &identity.namespaceSeen)
+		}
+	}
+	flush()
+	return resources
+}
+
+func newTemplateIdentity() templateIdentity {
+	return templateIdentity{metadataChild: -1, valid: true}
+}
+
+func (identity *templateIdentity) capture(line, key string, destination *string, seen *bool) {
+	if *seen {
+		identity.valid = false
+		return
+	}
+	*seen = true
+	value, ok := staticScalar(line, key)
+	if !ok {
+		identity.valid = false
+		return
+	}
+	*destination = value
+}
+
+func (identity templateIdentity) resource(path string, document int) (Resource, bool) {
+	if !identity.valid || !identity.apiVersionSeen || !identity.kindSeen || !identity.nameSeen {
+		return Resource{}, false
+	}
+	metadata := map[string]any{"name": identity.name}
+	if identity.namespaceSeen {
+		metadata["namespace"] = identity.namespace
+	}
+	object := map[string]any{
+		"apiVersion": identity.apiVersion,
+		"kind":       identity.kind,
+		"metadata":   metadata,
+	}
+	resource, err := resourceFromObject(object)
+	if err != nil {
+		return Resource{}, false
+	}
+	resource.Source = path
+	resource.Document = document
+	return resource, true
+}
+
+func staticScalar(line, key string) (string, bool) {
+	raw := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), key+":"))
+	if raw == "" || strings.Contains(raw, "{{") || strings.Contains(raw, "}}") {
+		return "", false
+	}
+	var value any
+	if err := yaml.Unmarshal([]byte(raw), &value); err != nil {
+		return "", false
+	}
+	stringValue, ok := value.(string)
+	return stringValue, ok && stringValue != ""
+}
+
+func isTemplateDirective(line string) bool {
+	return strings.HasPrefix(line, "{{") && strings.HasSuffix(line, "}}")
+}
+
+func isDocumentBoundary(line string) bool {
+	return line == "---" || strings.HasPrefix(line, "--- #")
 }
 
 func looksKubernetes(object map[string]any) bool {
