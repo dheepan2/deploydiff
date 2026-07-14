@@ -66,3 +66,9 @@ Phase 1 does not infer deployment impact from properties, Helm values,
 `Chart.yaml`, Skaffold configuration, or unrendered templates. Those inputs need
 an explicit render stage before the direct action. Native render orchestration
 and a stable end-user CLI contract remain future design work.
+
+The reusable workflow owns PR-comment delivery. It upserts a single comment
+identified by a hidden marker when a deployment diff exists and removes stale
+comments when a later push has no deployment changes. Comment delivery is
+best-effort and never replaces the job summary, which remains available for
+fork pull requests and repositories without a writable pull-request token.

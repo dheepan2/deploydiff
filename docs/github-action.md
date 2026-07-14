@@ -4,7 +4,7 @@ DeployDiff is packaged as a Docker-based GitHub Action. It compares two
 Kubernetes manifest files or directories and writes the rendered report to the
 workflow log, job summary, and the `report` action output.
 
-## Inputs
+## Direct action inputs
 
 | Input | Required | Description |
 | --- | --- | --- |
@@ -12,6 +12,14 @@ workflow log, job summary, and the `report` action output.
 | `after` | Yes | Path to the changed manifest file or directory. |
 | `output` | No | `table` (default), `json`, or `yaml`. |
 | `discover-manifests` | No | Discover Kubernetes manifests in arbitrary YAML paths; defaults to `true`. |
+
+## Reusable PR workflow inputs
+
+| Input | Required | Description |
+| --- | --- | --- |
+| `manifest-path` | No | Repository path to scan for changed manifests; defaults to `.`. |
+| `output` | No | `table` (default), `json`, or `yaml`. |
+| `comment` | No | Create or update a PR comment when changes exist; defaults to `true`. |
 
 ## Pull request workflow (recommended)
 
@@ -31,13 +39,15 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   compare:
-    uses: dheepan2/deploydiff/.github/workflows/compare-pr.yml@v0.1.10
+    uses: dheepan2/deploydiff/.github/workflows/compare-pr.yml@v0.1.11
     with:
       manifest-path: . # Or a folder such as deploy/kubernetes
       output: table
+      comment: true
 ```
 
 Use `manifest-path: .` when manifests may live anywhere in the repository. A
@@ -50,9 +60,16 @@ Helm values, `Chart.yaml`, Skaffold configuration, and unrendered templates are
 not interpreted as deployment changes. Render those inputs before using the
 direct action when their deployment impact must be compared.
 
+When `comment` is enabled, the workflow creates one DeployDiff pull request
+comment only when deployment changes exist. Later pushes update that comment;
+if the deployment diff disappears, the comment is deleted. The caller must
+grant `pull-requests: write` as shown above. GitHub gives fork pull requests a
+read-only token, so they keep the job-summary report without attempting a
+comment.
+
 ## Direct action usage
 
 If your workflow already checks out both revisions, use the Docker action
 directly with the `before` and `after` paths described above. The action creates
-a PR check and adds the report to the job summary. Posting a comment directly
-on a pull request is intentionally not enabled by default.
+a PR check and adds the report to the job summary. Automatic comments are
+provided by the reusable pull request workflow, not the direct Docker action.

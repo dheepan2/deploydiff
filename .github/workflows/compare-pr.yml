@@ -13,9 +13,15 @@ on:
         required: false
         type: string
         default: table
+      comment:
+        description: Create or update a pull request comment when deployment changes are found.
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   compare:
@@ -93,9 +99,70 @@ jobs:
           echo "after=.deploydiff/after" >> "$GITHUB_OUTPUT"
 
       - name: Compare deployment impact
-        uses: dheepan2/deploydiff@v0.1.10
+        id: deploydiff
+        uses: dheepan2/deploydiff@v0.1.11
         with:
           before: ${{ steps.scope.outputs.before }}
           after: ${{ steps.scope.outputs.after }}
           output: ${{ inputs.output }}
           discover-manifests: true
+
+      - name: Create or update pull request comment
+        if: ${{ inputs.comment && github.event.pull_request.head.repo.full_name == github.repository }}
+        continue-on-error: true
+        uses: actions/github-script@v8
+        env:
+          DEPLOYDIFF_REPORT: ${{ steps.deploydiff.outputs.report }}
+          DEPLOYDIFF_OUTPUT: ${{ inputs.output }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const marker = '<!-- deploydiff-report -->';
+            const report = (process.env.DEPLOYDIFF_REPORT || '').trim();
+            const format = process.env.DEPLOYDIFF_OUTPUT || 'table';
+
+            let hasChanges;
+            if (format === 'json') {
+              const parsed = JSON.parse(report);
+              hasChanges = parsed.added.length > 0 || parsed.removed.length > 0 || parsed.modified.length > 0;
+            } else if (format === 'yaml') {
+              hasChanges = report !== 'added: []\nremoved: []\nmodified: []';
+            } else {
+              hasChanges = report !== 'No deployment changes.';
+            }
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const existing = comments.find(comment =>
+              comment.user &&
+              comment.user.login === 'github-actions[bot]' &&
+              comment.body &&
+              comment.body.includes(marker)
+            );
+
+            if (!hasChanges) {
+              if (existing) {
+                await github.rest.issues.deleteComment({ owner, repo, comment_id: existing.id });
+              }
+              core.info('No deployment changes; no pull request comment is needed.');
+              return;
+            }
+
+            const limit = 60000;
+            const rendered = report.length > limit
+              ? `${report.slice(0, limit)}\n\n... report truncated; see the job summary for the complete output.`
+              : report;
+            const language = format === 'table' ? 'text' : format;
+            const body = `${marker}\n## DeployDiff — Deployment Impact\n\n\`\`\`${language}\n${rendered}\n\`\`\``;
+
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
