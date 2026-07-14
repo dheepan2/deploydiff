@@ -43,7 +43,7 @@ permissions:
 
 jobs:
   compare:
-    uses: dheepan2/deploydiff/.github/workflows/compare-pr.yml@v0.1.12
+    uses: dheepan2/deploydiff/.github/workflows/compare-pr.yml@v0.1.13
     with:
       manifest-path: . # Or a folder such as deploy/kubernetes
       output: table
@@ -56,9 +56,12 @@ kind-changed manifests are supported because candidates are selected from both
 the base and head revisions.
 
 Phase 1 fully compares changed, plain Kubernetes YAML. For unrendered Helm
-templates, it compares only static `apiVersion`, `kind`, `metadata.name`, and
-optional namespace fields. This detects identity changes such as Deployment to
-StatefulSet, but not changes to templated replicas, images, or dependencies.
+templates, it extracts static identity and performs best-effort field comparison
+by parsing the YAML around inline template actions. This detects identity
+changes such as Deployment to StatefulSet and common changes to labels,
+annotations, replica defaults, and image expressions. Unsupported template
+structures fall back to identity-only comparison; DeployDiff does not evaluate
+the final Helm values or runtime dependencies.
 Changes to properties, Helm values, `Chart.yaml`, and Skaffold configuration are
 not interpreted as deployment changes. Render those inputs before using the
 direct action when their full deployment impact must be compared.

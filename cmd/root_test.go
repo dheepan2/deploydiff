@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -183,6 +184,52 @@ spec:
 	}
 	if strings.Contains(out, "Modified") {
 		t.Errorf("kind change should not be rendered as modified:\n%s", out)
+	}
+}
+
+func TestCompareDiscoversFieldChangesInHelmTemplate(t *testing.T) {
+	dir := t.TempDir()
+	before := filepath.Join(dir, "before")
+	after := filepath.Join(dir, "after")
+	if err := os.MkdirAll(before, 0o755); err != nil {
+		t.Fatalf("create before directory: %v", err)
+	}
+	if err := os.MkdirAll(after, 0o755); err != nil {
+		t.Fatalf("create after directory: %v", err)
+	}
+
+	template := func(label string, replicas int) string {
+		return `{{- if .Values.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: activityloader
+  labels:
+    app: ` + label + `
+spec:
+  replicas: {{ .Values.replicas | default ` + fmt.Sprint(replicas) + ` }}
+  selector:
+    matchLabels:
+      app: activityloader
+{{- end }}
+`
+	}
+	writeManifest(t, before, "activityloader.yaml", template("activityloader", 1))
+	writeManifest(t, after, "activityloader.yaml", template("activityTester", 3))
+
+	out, _, err := runCommand(t, "compare", "--discover", before, after)
+	if err != nil {
+		t.Fatalf("compare Helm field changes returned an error: %v", err)
+	}
+	for _, expected := range []string{
+		"Modified (1)",
+		"~ apps/v1 Deployment activityloader",
+		`metadata.labels.app: "activityloader" → "activityTester"`,
+		`spec.replicas: "{{ .Values.replicas | default 1 }}" → "{{ .Values.replicas | default 3 }}"`,
+	} {
+		if !strings.Contains(out, expected) {
+			t.Errorf("template field comparison does not contain %q:\n%s", expected, out)
+		}
 	}
 }
 

@@ -36,7 +36,8 @@ func Load(path string) ([]Resource, error) {
 // is considered Kubernetes-looking when it has kind or metadata; incomplete
 // Kubernetes-looking documents still return a validation error. apiVersion
 // alone is not enough because Helm Chart.yaml files use that field too. For
-// unrendered templates, only static Kubernetes identity fields are discovered.
+// unrendered templates, static Kubernetes identities and best-effort workload
+// fields are discovered without evaluating the template.
 func Discover(path string) ([]Resource, error) {
 	return load(path, true)
 }
@@ -96,7 +97,7 @@ func loadFile(path string, discover bool) ([]Resource, error) {
 			return nil, fmt.Errorf("read manifest file %q: %w", path, err)
 		}
 		if hasTemplateActions(contents) {
-			return discoverTemplateIdentities(path, contents), nil
+			return discoverTemplateResources(path, contents), nil
 		}
 		reader = bytes.NewReader(contents)
 	} else {
@@ -156,16 +157,19 @@ type templateIdentity struct {
 	valid          bool
 }
 
-func discoverTemplateIdentities(path string, contents []byte) []Resource {
+func discoverTemplateResources(path string, contents []byte) []Resource {
 	document := 1
 	identity := newTemplateIdentity()
+	var documentLines []string
 	var resources []Resource
 
 	flush := func() {
-		if resource, ok := identity.resource(path, document); ok {
+		object, _ := parseTemplateObject(documentLines)
+		if resource, ok := identity.resource(path, document, object); ok {
 			resources = append(resources, resource)
 		}
 		identity = newTemplateIdentity()
+		documentLines = nil
 	}
 
 	for _, line := range strings.Split(string(contents), "\n") {
@@ -176,6 +180,7 @@ func discoverTemplateIdentities(path string, contents []byte) []Resource {
 			document++
 			continue
 		}
+		documentLines = append(documentLines, line)
 		if trimmed == "" || strings.HasPrefix(trimmed, "#") || isTemplateDirective(trimmed) {
 			continue
 		}
@@ -233,26 +238,133 @@ func (identity *templateIdentity) capture(line, key string, destination *string,
 	*destination = value
 }
 
-func (identity templateIdentity) resource(path string, document int) (Resource, bool) {
+func (identity templateIdentity) resource(path string, document int, object map[string]any) (Resource, bool) {
 	if !identity.valid || !identity.apiVersionSeen || !identity.kindSeen || !identity.nameSeen {
 		return Resource{}, false
 	}
+	if resource, err := resourceFromObject(object); err == nil &&
+		resource.APIVersion == identity.apiVersion &&
+		resource.Kind == identity.kind &&
+		resource.Name == identity.name &&
+		resource.Namespace == identity.namespace {
+		resource.Source = path
+		resource.Document = document
+		return resource, true
+	}
+
 	metadata := map[string]any{"name": identity.name}
 	if identity.namespaceSeen {
 		metadata["namespace"] = identity.namespace
 	}
-	object := map[string]any{
+	identityObject := map[string]any{
 		"apiVersion": identity.apiVersion,
 		"kind":       identity.kind,
 		"metadata":   metadata,
 	}
-	resource, err := resourceFromObject(object)
+	resource, err := resourceFromObject(identityObject)
 	if err != nil {
 		return Resource{}, false
 	}
 	resource.Source = path
 	resource.Document = document
 	return resource, true
+}
+
+// parseTemplateObject replaces inline Go template actions with YAML-safe
+// placeholders, parses the surrounding YAML, and then restores normalized
+// template expressions. Standalone control and rendering actions are omitted;
+// if the remaining structure is not valid YAML, discovery falls back to the
+// static identity object built above.
+func parseTemplateObject(lines []string) (map[string]any, bool) {
+	replacements := map[string]string{}
+	sanitized := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if isTemplateDirective(strings.TrimSpace(line)) {
+			continue
+		}
+		replaced, ok := replaceTemplateActions(line, replacements)
+		if !ok {
+			return nil, false
+		}
+		sanitized = append(sanitized, replaced)
+	}
+
+	var object map[string]any
+	if err := yaml.Unmarshal([]byte(strings.Join(sanitized, "\n")), &object); err != nil || len(object) == 0 {
+		return nil, false
+	}
+	restored, ok := restoreTemplateValues(object, replacements)
+	if !ok {
+		return nil, false
+	}
+	object, ok = restored.(map[string]any)
+	return object, ok
+}
+
+func replaceTemplateActions(line string, replacements map[string]string) (string, bool) {
+	var result strings.Builder
+	remaining := line
+	for {
+		start := strings.Index(remaining, "{{")
+		if start == -1 {
+			result.WriteString(remaining)
+			return result.String(), true
+		}
+		end := strings.Index(remaining[start+2:], "}}")
+		if end == -1 {
+			return "", false
+		}
+		end += start + 4
+		action := remaining[start:end]
+		token := fmt.Sprintf("__DEPLOYDIFF_TEMPLATE_%d__", len(replacements))
+		replacements[token] = normalizeTemplateAction(action)
+		result.WriteString(remaining[:start])
+		result.WriteString(token)
+		remaining = remaining[end:]
+	}
+}
+
+func normalizeTemplateAction(action string) string {
+	body := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(action, "{{"), "}}"))
+	body = strings.TrimSpace(strings.TrimPrefix(body, "-"))
+	body = strings.TrimSpace(strings.TrimSuffix(body, "-"))
+	return "{{ " + body + " }}"
+}
+
+func restoreTemplateValues(value any, replacements map[string]string) (any, bool) {
+	switch current := value.(type) {
+	case string:
+		for token, action := range replacements {
+			current = strings.ReplaceAll(current, token, action)
+		}
+		return current, true
+	case []any:
+		for index, item := range current {
+			restored, ok := restoreTemplateValues(item, replacements)
+			if !ok {
+				return nil, false
+			}
+			current[index] = restored
+		}
+		return current, true
+	case map[string]any:
+		restoredMap := make(map[string]any, len(current))
+		for key, item := range current {
+			restoredKey, _ := restoreTemplateValues(key, replacements)
+			key = restoredKey.(string)
+			if _, duplicate := restoredMap[key]; duplicate {
+				return nil, false
+			}
+			restored, ok := restoreTemplateValues(item, replacements)
+			if !ok {
+				return nil, false
+			}
+			restoredMap[key] = restored
+		}
+		return restoredMap, true
+	default:
+		return value, true
+	}
 }
 
 func staticScalar(line, key string) (string, bool) {

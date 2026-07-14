@@ -62,8 +62,10 @@ deploydiff --output yaml compare ./before ./after
 Use `--discover` when the input directory includes unrelated YAML such as Helm
 values, `Chart.yaml`, GitHub workflow files, application configuration, or
 unrendered Helm templates. For templated files, DeployDiff extracts static
-Kubernetes identity fields only; dynamic identities are skipped. Full workload
-field comparison requires rendered Kubernetes YAML:
+Kubernetes identities and best-effort field structure without evaluating Helm.
+This detects common inline template changes such as replica defaults and image
+expressions. Dynamic identities are skipped, and full runtime-value comparison
+still requires rendered Kubernetes YAML:
 
 ```bash
 deploydiff compare --discover ./before-repository ./after-repository

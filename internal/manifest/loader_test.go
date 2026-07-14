@@ -116,6 +116,77 @@ spec:
 	}
 }
 
+func TestDiscoverPreservesComparableFieldsFromHelmTemplate(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFixture(t, dir, "activityloader.yaml", `
+{{- if .Values.activityLoaderEnabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: activityloader
+  labels:
+    app: activityloader
+  annotations:
+    "autoscaler/hpa.scalingFormula": "{{ .Values.activityLoaderHpaScalingFormula }}"
+spec:
+  replicas: {{ .Values.replicas | default 1 }}
+  selector:
+    matchLabels:
+      app: activityloader
+{{- end }}
+`)
+
+	resources, err := Discover(path)
+	if err != nil {
+		t.Fatalf("Discover returned an error: %v", err)
+	}
+	if len(resources) != 1 {
+		t.Fatalf("discovered %d resources, want 1", len(resources))
+	}
+	resource := resources[0]
+	metadata := resource.Object["metadata"].(map[string]any)
+	labels := metadata["labels"].(map[string]any)
+	annotations := metadata["annotations"].(map[string]any)
+	spec := resource.Object["spec"].(map[string]any)
+	if labels["app"] != "activityloader" {
+		t.Errorf("metadata.labels.app = %#v", labels["app"])
+	}
+	if annotations["autoscaler/hpa.scalingFormula"] != "{{ .Values.activityLoaderHpaScalingFormula }}" {
+		t.Errorf("template annotation = %#v", annotations["autoscaler/hpa.scalingFormula"])
+	}
+	if spec["replicas"] != "{{ .Values.replicas | default 1 }}" {
+		t.Errorf("spec.replicas = %#v", spec["replicas"])
+	}
+}
+
+func TestDiscoverFallsBackToIdentityForUnsupportedHelmStructure(t *testing.T) {
+	dir := t.TempDir()
+	path := writeFixture(t, dir, "conditional-spec.yaml", `
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+{{- if .Values.firstMode }}
+spec:
+  replicas: 1
+{{- else }}
+spec:
+  replicas: 2
+{{- end }}
+`)
+
+	resources, err := Discover(path)
+	if err != nil {
+		t.Fatalf("Discover returned an error: %v", err)
+	}
+	if len(resources) != 1 {
+		t.Fatalf("discovered %d resources, want 1", len(resources))
+	}
+	if len(resources[0].Object) != 3 {
+		t.Errorf("fallback object = %#v, want identity fields only", resources[0].Object)
+	}
+}
+
 func TestLoadRejectsInvalidAndIncompleteDocuments(t *testing.T) {
 	dir := t.TempDir()
 

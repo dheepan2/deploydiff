@@ -100,7 +100,7 @@ jobs:
 
       - name: Compare deployment impact
         id: deploydiff
-        uses: dheepan2/deploydiff@v0.1.12
+        uses: dheepan2/deploydiff@v0.1.13
         with:
           before: ${{ steps.scope.outputs.before }}
           after: ${{ steps.scope.outputs.after }}

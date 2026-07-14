@@ -62,11 +62,14 @@ changed paths between the pull request base and head revisions and selects
 Both versions of each candidate are compared, so additions, deletions, renames,
 and resource-kind changes are represented correctly.
 
-For unrendered Helm templates, Phase 1 extracts only static `apiVersion`, `kind`,
-`metadata.name`, and optional namespace values. Dynamic or ambiguous identity
-fields cause that template document to be skipped. The resulting minimal object
-detects additions, removals, and identity changes, but intentionally cannot
-claim that templated workload fields changed.
+For unrendered Helm templates, Phase 1 extracts static `apiVersion`, `kind`,
+`metadata.name`, and optional namespace values. It replaces inline Go-template
+actions with YAML-safe placeholders, parses the surrounding structure, and
+restores normalized expressions for field-level comparison. Common label,
+annotation, replica, image, and similar changes can therefore be reported
+without evaluating Helm. Dynamic or ambiguous identity fields cause that
+template document to be skipped. Templates that cannot be safely parsed fall
+back to identity-only comparison.
 
 Phase 1 does not infer deployment impact from properties, Helm values,
 `Chart.yaml`, or Skaffold configuration. Those inputs need an explicit render
